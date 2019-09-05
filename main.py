@@ -39,31 +39,34 @@ def recreate_database():
 
     run_command("""
         CREATE TABLE artist (
-            artist_id TEXT PRIMARY KEY,
-            name TEXT
+            artist_id INTEGER PRIMARY KEY,
+            name TEXT,
+            uri TEXT UNIQUE
         );"""
     )
 
     run_command("""
         CREATE TABLE album (
-            album_id TEXT PRIMARY KEY,
+            album_id INTEGER PRIMARY KEY,
             name TEXT,
             release_date TEXT,
-            artist_id TEXT,
+            artist_id INTEGER,
+            uri TEXT UNIQUE,
             FOREIGN KEY (artist_id) REFERENCES artist(artist_id)
         );"""
     )
 
     run_command("""
         CREATE TABLE track (
-            track_id TEXT PRIMARY KEY,
+            track_id INTEGER PRIMARY KEY,
             name VARCHAR,
-            album_id TEXT,
+            album_id INTEGER,
             track_number INTEGER,
             composer TEXT,
             duration_ms INTEGER,
             popularity FLOAT,    
             explicit BOOL,
+            uri TEXT UNIQUE,
             FOREIGN KEY (album_id) REFERENCES album(album_id)
         );"""
     )
@@ -93,7 +96,7 @@ def get_playlist_tracks(playlist_id, key):
     # this only gets called at the start of the generator
     print("Setting initial variables")
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-    params = {"offset": 3170, "limit": 1} # temp for testing a few
+    params = {"offset": 0, "limit": 100} # defaults
     headers = {"Authorization": "Bearer " + key}
     i = 0
 
@@ -145,78 +148,87 @@ def playlist_logic():
 
         for track in tracks:
             album_artist = [artist for artist in track['album']['artists']]
-            if len(album_artist) == 1:
-                album_artist_id = album_artist[0]['id']
-                album_artist_name = album_artist[0]['name']
-            else:
-                raise Exception("More than one album artist:", album_artist)
             
-            # print(
-            #     type(album_artist_id), album_artist_id,
-            #     type(album_artist_name), album_artist_name
-            # )
+            artist_uri = album_artist[0]['id']
+            artist_name = album_artist[0]['name']
+            
+            if len(album_artist) > 1:
+                print("More than one album artist exists, using the first listed. Album name:", track['album']['name'])
+                # raise Exception("More than one album artist:\n", album_artist, track['album']['name'])
 
             # insert artist data into artist table (if unique)
             run_command(f"""
-            INSERT OR IGNORE INTO artist VALUES
-            (
-                '{album_artist_id}',
-                '{album_artist_name}'
-            )
-            """)
+            INSERT OR IGNORE INTO artist (name, uri)
+            VALUES ("{artist_name}", "{artist_uri}")""")
 
-            album_id = track['album']['id']
+            album_uri = track['album']['id']
             album_name = track['album']['name']
             album_release = track['album']['release_date']
 
-            # print(
-            #     type(album_id), album_id,
-            #     type(album_name), album_name,
-            #     type(album_release), album_release,
-            #     # type(album_artist), album_artist,
-            #     type(album_artist_id), album_artist_id
-            # )
+            q1 = f"SELECT artist_id FROM artist WHERE uri = '{artist_uri}'"
+            artist_id = run_query(q1)
+            artist_id = int(artist_id.values[0])
 
             # insert album data into album table (if unique)
             run_command(f"""
-            INSERT OR IGNORE INTO album VALUES
+            INSERT OR IGNORE INTO album
             (
-                '{album_id}',
-                '{album_name}',
-                '{album_release}',
-                '{album_artist_id}'
+                name,
+                release_date,
+                artist_id,
+                uri
+            )
+            VALUES
+            (
+                "{album_name}",
+                "{album_release}",
+                {artist_id},
+                "{album_uri}"
             );
             """)
 
-            track_id = track['id']
             name = track['name']
+            track_uri = track['id']
             track_number = track['track_number']
             composer = ', '.join(artist['name'] for artist in track['artists'])
             duration = track['duration_ms']
             popularity = track['popularity']
             explicit = track['explicit']
 
-            # print(
-            #     type(track_id), track_id,
-            #     type(name), name,
-            #     type(album_id), album_id,
-            #     type(track_number), track_number,
-            #     type(composer), composer,
-            #     type(duration), duration,
-            #     type(popularity), popularity,
-            #     type(explicit), explicit
-            #     )
+            q2 = f"SELECT album_id FROM album WHERE uri = '{album_uri}'"
+            album_id = run_query(q2)
+            # print(album_id)
+            album_id = int(album_id.values[0])
 
+            # print(
+            #     track_uri, name, track_number, composer, duration,
+            #     popularity, explicit, album_id
+            # )
+
+            # insert track data into track table (if unique)
             run_command(f"""
-            INSERT OR IGNORE INTO track VALUES
-                ('{track_id}', 
-                '{name}', 
-                '{album_id}',
+            INSERT OR IGNORE INTO track 
+            (
+                name, 
+                album_id,
+                track_number, 
+                composer, 
+                duration_ms, 
+                popularity, 
+                explicit,
+                uri
+            )
+            VALUES
+            (
+                "{name}", 
+                {album_id},
                 {track_number}, 
-                '{composer}',
+                "{composer}",
                 {duration},
                 {popularity},
-                {explicit});
+                {explicit},
+                "{track_uri}"
+            );
             """)
 
         print("Successfully inserted response data. Continuing...")
