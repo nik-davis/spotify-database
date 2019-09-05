@@ -98,11 +98,11 @@ def get_playlist_tracks(playlist_id, key):
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
     params = {"offset": 0, "limit": 100} # defaults
     headers = {"Authorization": "Bearer " + key}
-    i = 0
+    # i = 0
 
     while True:
-        print("Start of while loop for i =", i)
-        i += 1
+        # print("Start of while loop for i =", i)
+        # i += 1
         # try:
         #     url
         #     params = None
@@ -129,14 +129,11 @@ def get_playlist_tracks(playlist_id, key):
             raise Exception(f"Bad response: [{code}] {msg}\n")
 
 # insert into database
-def playlist_logic():
+def playlist_logic(playlist_id):
     auth_key_path = './keys'
     auth_key_file = 'auth.txt'
 
     key = get_local_auth_key(auth_key_path, auth_key_file)
-
-    # set playlist id for now
-    playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
 
     print("Beginning to acquire response data.")
     for response in get_playlist_tracks(playlist_id, key):
@@ -257,10 +254,29 @@ if __name__ == "__main__":
                 print("Unknown input. 'yes' or 'no' only please.")
                 user_input = input("WARNING: This will completely wipe the database. Proceed? (yes/no) ")
 
-    playlist_logic()
+    user_input = input("Download playlist data? (y/n) ")
 
-    print(run_query("SELECT * FROM artist LIMIT 5"))
-    print(run_query("SELECT * FROM album LIMIT 5"))
-    print(run_query("SELECT * FROM track LIMIT 10"))
+    playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
+
+    while user_input not in ['n', 'N']:
+        if (user_input in ['y', 'Y']):
+            playlist_id = input("Input playlist ID: ")
+            assert len(playlist_id) == 22, "Supplied playlist ID is incorrect length"
+            playlist_logic(playlist_id)
+            break
+        else:
+            user_input = input("Download playlist data? (y/n) ")
+
+    if input("Show sample? (y/n) ") in ['y', 'Y']:
+        print(run_query("SELECT * FROM artist LIMIT 5"))
+        print(run_query("SELECT * FROM album LIMIT 5"))
+        print(run_query("SELECT * FROM track LIMIT 5"))
+
+        print(
+            run_query("SELECT COUNT(*) AS 'Number of artists' FROM artist"),
+            run_query("SELECT COUNT(*) AS 'Number of albums' FROM album"),
+            run_query("SELECT COUNT(*) AS 'Number of tracks' FROM track"),
+            sep='\n'
+        )
 
     print("Finished")
