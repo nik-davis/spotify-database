@@ -32,7 +32,7 @@ def show_tables():
 # create database if required
 def recreate_database():
     print("Recreating database...")
-    table_names = ['track', 'album', 'artist']
+    table_names = ['playlist_track', 'track', 'album', 'artist', 'playlist']
 
     for table_name in table_names:
         run_command(f"DROP TABLE IF EXISTS {table_name};")
@@ -71,6 +71,22 @@ def recreate_database():
         );"""
     )
 
+    run_command("""
+    CREATE TABLE playlist (
+        playlist_id INTEGER PRIMARY KEY,
+        name VARCHAR,
+        uri TEXT UNIQUE
+    );""")
+
+    run_command("""
+    CREATE TABLE playlist_track (
+        playlist_id INTEGER,
+        track_id INTEGER,
+        PRIMARY KEY (playlist_id, track_id)
+        FOREIGN KEY (playlist_id) REFERENCES playlist(playlist_id),
+        FOREIGN KEY (track_id) REFERENCES track(track_id)
+    );""")
+
     print("Recreating database complete")
 
 
@@ -96,7 +112,7 @@ def get_playlist_tracks(playlist_id, key):
     # this only gets called at the start of the generator
     print("Setting initial variables")
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-    params = {"offset": 0, "limit": 100} # defaults
+    params = {"offset": 0, "limit": 5} # defaults
     headers = {"Authorization": "Bearer " + key}
     # i = 0
 
@@ -128,6 +144,23 @@ def get_playlist_tracks(playlist_id, key):
             print(f'Bad response: [{code}] {msg}')
             raise Exception(f"Bad response: [{code}] {msg}\n")
 
+def get_playlist_name(playlist_id, key):
+    url = f'https://api.spotify.com/v1/playlists/{playlist_id}'
+    headers = {"Authorization": "Bearer " + key}
+    params = {"fields": "name"} # defaults
+
+    response = requests.get(url=url, headers=headers, params=params)
+    
+    if response.status_code == 200:
+        playlist_name = response.json()['name']
+    else:
+        code = response.status_code
+        msg = response.json()['error']['message']
+        print(f'Bad response: [{code}] {msg}')
+        raise Exception(f"Bad response: [{code}] {msg}\n")
+
+    return playlist_name
+
 # insert into database
 def playlist_logic(playlist_id):
     auth_key_path = './keys'
@@ -135,6 +168,14 @@ def playlist_logic(playlist_id):
 
     key = get_local_auth_key(auth_key_path, auth_key_file)
 
+    playlist_name = get_playlist_name(playlist_id, key)
+        
+    print("adding playlist id to playlist table")
+    run_command(f"""
+    INSERT OR IGNORE INTO playlist (name, uri)
+    VALUES ("{playlist_name}", "{playlist_id}")""")
+
+    
     print("Beginning to acquire response data.")
     for response in get_playlist_tracks(playlist_id, key):
         print("Retrieved from:", response.json()['href'][37:])
@@ -228,6 +269,19 @@ def playlist_logic(playlist_id):
             );
             """)
 
+            q3 = f"SELECT playlist_id FROM playlist WHERE uri = '{playlist_id}'"
+            internal_playlist_id = run_query(q3)
+            internal_playlist_id = int(internal_playlist_id.values[0])
+            
+            q4 = f"SELECT track_id FROM track WHERE uri = '{track_uri}'"
+            track_id = run_query(q4)
+            track_id = int(track_id.values[0])
+            
+            run_command(f"""
+            INSERT OR IGNORE INTO playlist_track
+            VALUES ({internal_playlist_id}, {track_id});
+            """)
+
         print("Successfully inserted response data. Continuing...")
         time.sleep(1)
         
@@ -254,13 +308,20 @@ if __name__ == "__main__":
                 print("Unknown input. 'yes' or 'no' only please.")
                 user_input = input("WARNING: This will completely wipe the database. Proceed? (yes/no) ")
 
-    user_input = input("Download playlist data? (y/n) ")
-
+    # just here for reference
+    # Saved Songs playlist
     playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
+    # test playlist 1:
+    # 0raoJZs73KPIdO2dhbed7z
+    # test playlist 2:
+    # 3jW9hviT2RIPWP1zDgud5N
 
+    user_input = input("Download playlist data? (y/n) ")
     while user_input not in ['n', 'N']:
         if (user_input in ['y', 'Y']):
             playlist_id = input("Input playlist ID: ")
+            if playlist_id == 'default':
+                playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
             assert len(playlist_id) == 22, "Supplied playlist ID is incorrect length"
             playlist_logic(playlist_id)
             break
@@ -271,11 +332,14 @@ if __name__ == "__main__":
         print(run_query("SELECT * FROM artist LIMIT 5"))
         print(run_query("SELECT * FROM album LIMIT 5"))
         print(run_query("SELECT * FROM track LIMIT 5"))
+        print(run_query("SELECT * FROM playlist LIMIT 5"))
+        print(run_query("SELECT * FROM playlist_track LIMIT 50"))
 
         print(
             run_query("SELECT COUNT(*) AS 'Number of artists' FROM artist"),
             run_query("SELECT COUNT(*) AS 'Number of albums' FROM album"),
             run_query("SELECT COUNT(*) AS 'Number of tracks' FROM track"),
+            run_query("SELECT COUNT(*) AS 'Number of playlists' FROM playlist"),
             sep='\n'
         )
 
