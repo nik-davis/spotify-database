@@ -187,8 +187,8 @@ def playlist_logic():
             );
             """)
 
-            name = track['name']
             track_uri = track['id']
+            name = str(track['name']).replace('"', '')
             track_number = track['track_number']
             composer = ', '.join(artist['name'] for artist in track['artists'])
             duration = track['duration_ms']
