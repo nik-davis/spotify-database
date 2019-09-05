@@ -61,7 +61,7 @@ def recreate_database():
             album_id TEXT,
             track_number INTEGER,
             composer TEXT,
-            duration INTEGER,
+            duration_ms INTEGER,
             popularity FLOAT,    
             explicit BOOL,
             FOREIGN KEY (album_id) REFERENCES album(album_id)
@@ -89,29 +89,36 @@ def get_local_auth_key(auth_key_path, auth_key_file):
 
 # retrieve playlist tracks
 def get_playlist_tracks(playlist_id, key):
-    while True:
-        time.sleep(1)
-        
-        try:
-            url
-            params = None
-        except UnboundLocalError:
-            # no url, assuming starting from beggining
-            url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-            params = {"offset": 2800, "limit": 10} # temp for testing a few
 
-        headers = {"Authorization": "Bearer " + key}
+    # this only gets called at the start of the generator
+    print("Setting initial variables")
+    url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+    params = {"offset": 3170, "limit": 1} # temp for testing a few
+    headers = {"Authorization": "Bearer " + key}
+    i = 0
+
+    while True:
+        print("Start of while loop for i =", i)
+        i += 1
+        # try:
+        #     url
+        #     params = None
+        # except UnboundLocalError:
+        #     # no url, assuming starting from beggining
+        #     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+        #     params = {"offset": 2800, "limit": 10} # temp for testing a few
 
         response = requests.get(url=url, headers=headers, params=params)
         
         if response.status_code == 200:
             if response.json()['next']:
                 url = response.json()['next']
+                params = None
             else:
                 yield response
                 return # raise StopIteration
             yield response
-            return # temporary, so just yields once
+            # return # temporary, so just yields once
         else:
             code = response.status_code
             msg = response.json()['error']['message']
