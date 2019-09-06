@@ -99,10 +99,10 @@ def get_local_auth_key(auth_key_path, auth_key_file):
         with open(path_to_file, 'r') as f:
             key = f.readline()
             if isinstance(key, str):
-                print('Found auth key, returning')
+                print('  Found auth key, returning')
                 return key
             else:
-                print('Error retrieving key from file. Check key exists.')
+                raise Exception('Error retrieving key from file. Check key exists.')
     except FileNotFoundError:
         print('Error finding auth key. Check key exists and check path')
 
@@ -110,7 +110,7 @@ def get_local_auth_key(auth_key_path, auth_key_file):
 def get_playlist_tracks(playlist_id, key):
 
     # this only gets called at the start of the generator
-    print("Setting initial variables")
+    print("  Setting initial variables")
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
     params = {"offset": 0, "limit": 5} # defaults
     headers = {"Authorization": "Bearer " + key}
@@ -163,6 +163,8 @@ def get_playlist_name(playlist_id, key):
 
 # insert into database
 def playlist_logic(playlist_id):
+    print(f"\nStarting retrieval for playlist: {playlist_id}")
+
     auth_key_path = './keys'
     auth_key_file = 'auth.txt'
 
@@ -170,16 +172,17 @@ def playlist_logic(playlist_id):
 
     playlist_name = get_playlist_name(playlist_id, key)
         
-    print("adding playlist id to playlist table")
     run_command(f"""
     INSERT OR IGNORE INTO playlist (name, uri)
     VALUES ("{playlist_name}", "{playlist_id}")""")
 
+    print(f"  Added {playlist_name} to playlist table")
     
-    print("Beginning to acquire response data.")
+    print("  Starting to acquire response data.")
+
     for response in get_playlist_tracks(playlist_id, key):
-        print("Retrieved from:", response.json()['href'][37:])
-        print("Inserting into database...")
+        print("  Retrieved from:", response.json()['href'][37:])
+        print("  Inserting into database...", end='\r')
 
         # insert track data into track table
         tracks = [item['track'] for item in response.json()['items']]
@@ -282,19 +285,33 @@ def playlist_logic(playlist_id):
             VALUES ({internal_playlist_id}, {track_id});
             """)
 
-        print("Successfully inserted response data. Continuing...")
+        print("  Successfully inserted response data. Continuing...")
         time.sleep(1)
         
     # retrieve full artist data
 
     # retrieve full album data
 
-    print("Operation complete. All playlist data retrieved.")
+    print("  Operation complete. All playlist data retrieved.")
 
+def run_sample_queries():
+    print(run_query("SELECT * FROM artist LIMIT 5"))
+    print(run_query("SELECT * FROM album LIMIT 5"))
+    print(run_query("SELECT * FROM track LIMIT 5"))
+    print(run_query("SELECT * FROM playlist LIMIT 5"))
+    print(run_query("SELECT * FROM playlist_track LIMIT 5"))
 
-if __name__ == "__main__":
-    print("Starting")
+    print(
+        run_query("SELECT COUNT(*) AS 'Number of artists' FROM artist"),
+        run_query("SELECT COUNT(*) AS 'Number of albums' FROM album"),
+        run_query("SELECT COUNT(*) AS 'Number of tracks' FROM track"),
+        run_query("SELECT COUNT(*) AS 'Number of playlists' FROM playlist"),
+        sep='\n'
+    )
 
+def run():
+    # todo: all inside run or start function?
+    # todo: own function
     if (input("Recreate database? (y/n) ") in ['y', 'Y']):
         user_input = input("WARNING: This will completely wipe the database. Proceed? (yes/no) ")
         while user_input not in ['no', 'NO']:
@@ -316,6 +333,7 @@ if __name__ == "__main__":
     # test playlist 2:
     # 3jW9hviT2RIPWP1zDgud5N
 
+    # todo: own function
     user_input = input("Download playlist data? (y/n) ")
     while user_input not in ['n', 'N']:
         if (user_input in ['y', 'Y']):
@@ -328,19 +346,26 @@ if __name__ == "__main__":
         else:
             user_input = input("Download playlist data? (y/n) ")
 
+    # test/sample cases
+    # todo: own function
     if input("Show sample? (y/n) ") in ['y', 'Y']:
-        print(run_query("SELECT * FROM artist LIMIT 5"))
-        print(run_query("SELECT * FROM album LIMIT 5"))
-        print(run_query("SELECT * FROM track LIMIT 5"))
-        print(run_query("SELECT * FROM playlist LIMIT 5"))
-        print(run_query("SELECT * FROM playlist_track LIMIT 50"))
+        run_sample_queries()
 
-        print(
-            run_query("SELECT COUNT(*) AS 'Number of artists' FROM artist"),
-            run_query("SELECT COUNT(*) AS 'Number of albums' FROM album"),
-            run_query("SELECT COUNT(*) AS 'Number of tracks' FROM track"),
-            run_query("SELECT COUNT(*) AS 'Number of playlists' FROM playlist"),
-            sep='\n'
-        )
+def run_test_playlists():
+    recreate_database()
+    print(show_tables())
+    playlist_logic('0raoJZs73KPIdO2dhbed7z')
+    playlist_logic('3jW9hviT2RIPWP1zDgud5N')
+    run_sample_queries()
+
+
+if __name__ == "__main__":
+    print("Starting")
+
+    # run_test_playlists()
+    run()
 
     print("Finished")
+
+    # todo: separate python files for db creation and downloading data
+    # todo: token generation a bit more automated
