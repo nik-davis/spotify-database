@@ -2,6 +2,7 @@
 import time
 import os
 
+# third party imports
 import requests
 import pandas as pd
 import sqlite3
@@ -112,7 +113,7 @@ def get_playlist_tracks(playlist_id, key):
     # this only gets called at the start of the generator
     print("  Setting initial variables")
     url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
-    params = {"offset": 0, "limit": 5} # defaults
+    params = {"offset": 0, "limit": 100} # defaults
     headers = {"Authorization": "Bearer " + key}
     # i = 0
 
@@ -309,7 +310,7 @@ def run_sample_queries():
         sep='\n'
     )
 
-def run():
+def run_from_user_input():
     # todo: all inside run or start function?
     # todo: own function
     if (input("Recreate database? (y/n) ") in ['y', 'Y']):
@@ -328,15 +329,12 @@ def run():
     # just here for reference
     # Saved Songs playlist
     playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
-    # test playlist 1:
-    # 0raoJZs73KPIdO2dhbed7z
-    # test playlist 2:
-    # 3jW9hviT2RIPWP1zDgud5N
+
 
     # todo: own function
     user_input = input("Download playlist data? (y/n) ")
     while user_input not in ['n', 'N']:
-        if (user_input in ['y', 'Y']):
+        if user_input in ['y', 'Y']:
             playlist_id = input("Input playlist ID: ")
             if playlist_id == 'default':
                 playlist_id = '0VLaP8vVXSIi1c11Jln1AT'
@@ -354,8 +352,29 @@ def run():
 def run_test_playlists():
     recreate_database()
     print(show_tables())
+    
+    # TestPlaylist1
     playlist_logic('0raoJZs73KPIdO2dhbed7z')
+    # TestPlaylist2
     playlist_logic('3jW9hviT2RIPWP1zDgud5N')
+    
+    run_sample_queries()
+
+def run_many():
+    playlist_ids = [
+        '57kWvG8nshZ2GhZAxdueLV', # metal mondays
+        '0CtvRplUSsxBCO7WmkYESy', # productivity
+        '0Z8nSkyBHd40u0R9NkbA8w', # relaxing calm
+        '5S7lrzPTK9VaX9kNpsrdeS', # tv & movies
+        '5WmaeUCYm7s6WKpj7LKXpd', # game soundtracks
+        '0VLaP8vVXSIi1c11Jln1AT'  # saved songs
+    ]
+
+    recreate_database()
+
+    for playlist_id in playlist_ids:
+        playlist_logic(playlist_id)
+
     run_sample_queries()
 
 
@@ -363,9 +382,14 @@ if __name__ == "__main__":
     print("Starting")
 
     # run_test_playlists()
-    run()
+    # run_from_user_input()
+    run_many()
 
     print("Finished")
 
     # todo: separate python files for db creation and downloading data
+
     # todo: token generation a bit more automated
+
+    # todo: create 90's playlist from data automatically? 
+    # (actually leave this to analysis stage)
