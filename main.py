@@ -7,6 +7,9 @@ import requests
 import pandas as pd
 import sqlite3
 
+# local imports
+from tools.database import DatabaseHelper
+
 DB = "./data/spotify.db"
 
 # database helper functions
@@ -189,6 +192,7 @@ def playlist_logic(playlist_id):
         tracks = [item['track'] for item in response.json()['items']]
 
         for track in tracks:
+            # artist
             album_artist = [artist for artist in track['album']['artists']]
             
             artist_uri = album_artist[0]['id']
@@ -203,6 +207,7 @@ def playlist_logic(playlist_id):
             INSERT OR IGNORE INTO artist (name, uri)
             VALUES ("{artist_name}", "{artist_uri}")""")
 
+            # album
             album_uri = track['album']['id']
             album_name = track['album']['name']
             album_release = track['album']['release_date']
@@ -229,6 +234,7 @@ def playlist_logic(playlist_id):
             );
             """)
 
+            # track
             track_uri = track['id']
             name = str(track['name']).replace('"', '')
             track_number = track['track_number']
@@ -273,6 +279,7 @@ def playlist_logic(playlist_id):
             );
             """)
 
+            # playlist_track
             q3 = f"SELECT playlist_id FROM playlist WHERE uri = '{playlist_id}'"
             internal_playlist_id = run_query(q3)
             internal_playlist_id = int(internal_playlist_id.values[0])
@@ -288,7 +295,7 @@ def playlist_logic(playlist_id):
 
         print("  Successfully inserted response data. Continuing...")
         time.sleep(1)
-        
+
     # retrieve full artist data
 
     # retrieve full album data
@@ -350,15 +357,18 @@ def run_from_user_input():
         run_sample_queries()
 
 def run_test_playlists():
-    recreate_database()
-    print(show_tables())
+
+    db = DatabaseHelper("./data/spotify.db")
+
+    db.recreate_database()
+    print(db.show_tables())
     
     # TestPlaylist1
-    playlist_logic('0raoJZs73KPIdO2dhbed7z')
+    db.get_playlist_data('0raoJZs73KPIdO2dhbed7z')
     # TestPlaylist2
-    playlist_logic('3jW9hviT2RIPWP1zDgud5N')
+    db.get_playlist_data('3jW9hviT2RIPWP1zDgud5N')
     
-    run_sample_queries()
+    print(db)
 
 def run_many():
     playlist_ids = [
@@ -379,13 +389,13 @@ def run_many():
 
 
 if __name__ == "__main__":
-    print("Starting")
+    print("Main: Starting")
 
-    # run_test_playlists()
+    run_test_playlists()
     # run_from_user_input()
-    run_many()
+    # run_many()
 
-    print("Finished")
+    print("Main: Finished")
 
     # todo: separate python files for db creation and downloading data
 
