@@ -47,11 +47,11 @@ class DatabaseHelper:
 
     def show_tables(self):
         q = """
-        SELECT
-            name,
-            type
-        FROM sqlite_master
-        WHERE type IN ("table","view");
+            SELECT
+                name,
+                type
+            FROM sqlite_master
+            WHERE type IN ("table","view");
         """
         return self.run_query(q)
 
@@ -69,8 +69,8 @@ class DatabaseHelper:
                 artist_id INTEGER PRIMARY KEY,
                 name TEXT,
                 uri TEXT UNIQUE
-            );"""
-        )
+            );
+        """)
 
         self.run_command("""
             CREATE TABLE album (
@@ -80,8 +80,8 @@ class DatabaseHelper:
                 artist_id INTEGER,
                 uri TEXT UNIQUE,
                 FOREIGN KEY (artist_id) REFERENCES artist(artist_id)
-            );"""
-        )
+            );
+        """)
 
         self.run_command("""
             CREATE TABLE track (
@@ -95,24 +95,26 @@ class DatabaseHelper:
                 explicit BOOL,
                 uri TEXT UNIQUE,
                 FOREIGN KEY (album_id) REFERENCES album(album_id)
-            );"""
-        )
+            );
+        """)
 
         self.run_command("""
-        CREATE TABLE playlist (
-            playlist_id INTEGER PRIMARY KEY,
-            name VARCHAR,
-            uri TEXT UNIQUE
-        );""")
+            CREATE TABLE playlist (
+                playlist_id INTEGER PRIMARY KEY,
+                name VARCHAR,
+                uri TEXT UNIQUE
+            );
+        """)
 
         self.run_command("""
-        CREATE TABLE playlist_track (
-            playlist_id INTEGER,
-            track_id INTEGER,
-            PRIMARY KEY (playlist_id, track_id)
-            FOREIGN KEY (playlist_id) REFERENCES playlist(playlist_id),
-            FOREIGN KEY (track_id) REFERENCES track(track_id)
-        );""")
+            CREATE TABLE playlist_track (
+                playlist_id INTEGER,
+                track_id INTEGER,
+                PRIMARY KEY (playlist_id, track_id)
+                FOREIGN KEY (playlist_id) REFERENCES playlist(playlist_id),
+                FOREIGN KEY (track_id) REFERENCES track(track_id)
+            );
+        """)
 
         print("Recreating database complete")
 
@@ -190,8 +192,10 @@ class DatabaseHelper:
 
         q1 = f"SELECT artist_id FROM artist WHERE uri = '{artist_uri}'"
         artist_id = self.run_query(q1)
+        
+        # ensuring new method same as old
         assert artist_id.iloc[0, 0] == int(artist_id.values[0])
-        # artist_id = int(artist_id.values[0])
+        
         artist_id = artist_id.iloc[0, 0]
 
         # insert album data into album table (if unique)
@@ -228,13 +232,7 @@ class DatabaseHelper:
         q2 = f"SELECT album_id FROM album WHERE uri = '{album_uri}'"
         album_id = self.run_query(q2)
         assert album_id.iloc[0, 0] == int(album_id.values[0])
-        # print(album_id)
         album_id = album_id.iloc[0, 0]
-
-        # print(
-        #     track_uri, name, track_number, composer, duration,
-        #     popularity, explicit, album_id
-        # )
 
         # insert track data into track table (if unique)
         self.run_command(f"""
