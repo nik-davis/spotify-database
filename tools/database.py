@@ -6,9 +6,43 @@ import requests
 from tools.keyhandler import get_local_auth_key
 
 class DatabaseHelper:
+    """
+    Handle the opening, printing, querying and command execute of a database.
+    
+    db : string path and name of database (e.g. './data/mydata.db')
+    """
 
     def __init__(self, db):
-        # check if database file exists, and attempt creation if not
+        self._check_and_create(db)
+        self.db = db
+        
+
+    def __repr__(self):
+        q0 = "SELECT name FROM sqlite_master WHERE type = 'table';"
+        table_names = self.run_query(q0)
+        
+        for table_name in table_names['name'].values:
+            q1 = f"SELECT * FROM {table_name} LIMIT 5;"
+            print(self.run_query(q1))
+
+        for table_name in table_names['name'].values:
+            q2 = f"SELECT COUNT(*) FROM {table_name};"
+            
+            print(
+                f"Number of {table_name}s:",
+                self.run_query(q2).iloc[0, 0]
+            )
+
+        return "Printed database: " + self.db
+        
+
+    # def __str__(self):
+    #     return self.__repr__
+
+
+    def _check_and_create(self, db):
+        """Check if database file exists, and attempt creation if not.
+        """
         if os.path.isfile(db):
             print("Database file exists, no further action required.")
         else:
@@ -27,33 +61,7 @@ class DatabaseHelper:
         print("Attempting to create database")
         conn = sqlite3.connect(db)
         conn.close()
-        
-        self.db = db
-        
 
-    def __repr__(self):
-        table_names = self.run_query("SELECT name FROM sqlite_master WHERE type = 'table';")
-        # print(table_names['name'].values)
-        
-        for table_name in table_names['name'].values:
-            q1 = f"SELECT * FROM {table_name} LIMIT 5;"
-            # print(q1)
-            print(self.run_query(q1))
-
-        for table_name in table_names['name'].values:
-            q2 = f"SELECT COUNT(*) FROM {table_name};"
-            
-            print(
-                f"Number of {table_name}s:",
-                self.run_query(q2).iloc[0, 0]
-            )
-
-        return "Database: " + self.db
-        
-
-    # def __str__(self):
-    #     return self.__repr__
-        
 
     def run_query(self, q):
         with sqlite3.connect(self.db) as conn:
@@ -79,6 +87,12 @@ class DatabaseHelper:
 
 
 class PlaylistDatabase(DatabaseHelper):
+    """Create or open database, creating tables if they don't exist. Can
+    optionally wipe the database first.
+    
+    wipe_database : bool
+        drops all tables in database and recreates
+    """
     def __init__(self, db, wipe_database=False):
         super().__init__(db)
 
@@ -148,6 +162,7 @@ class PlaylistDatabase(DatabaseHelper):
 
 
     def _wipe_database(self):
+        """Drop all tables found in database."""
 
         print("Wiping database...")
 
@@ -165,6 +180,7 @@ class PlaylistDatabase(DatabaseHelper):
 
 
     def _get_playlist_name(self, playlist_id, key):
+        """Return just the playlist name from playlist_id."""
         url = f'https://api.spotify.com/v1/playlists/{playlist_id}'
         headers = {"Authorization": "Bearer " + key}
         params = {"fields": "name"}
@@ -183,7 +199,7 @@ class PlaylistDatabase(DatabaseHelper):
 
     
     def _get_playlist_tracks(self, playlist_id, key):
-
+        """Generator to fetch all tracks from a Spotify playlist."""
         # this only gets called at the start of the generator
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
         params = {"offset": 0, "limit": 100} # defaults
@@ -324,6 +340,13 @@ class PlaylistDatabase(DatabaseHelper):
 
 
     def add_playlist_data(self, playlist_id):
+        """Retrieve playlist data from Spotify for playlist_id and insert into
+        the connected database.
+
+        playlist_id : str
+            can be full uri ('spotify:playlist:3jW9hviT2RIPWP1zDgud5N')
+            or just the id ('3jW9hviT2RIPWP1zDgud5N')
+        """
         out = None
         if ':' in playlist_id:
             out = playlist_id + ' => '
@@ -366,5 +389,17 @@ class PlaylistDatabase(DatabaseHelper):
 
 
     def add_multiple_playlists(self, playlist_ids):
+        """Retrieve playlist data from Spotify for multiple playlists and
+        insert into the connected database.
+
+        playlist_ids : list of str
+            strings can be full uri or just the id.
+            example:
+
+            playlist_ids = [
+                '0raoJZs73KPIdO2dhbed7z',
+                'spotify:playlist:3jW9hviT2RIPWP1zDgud5N'
+            ]
+        """
         for playlist_id in playlist_ids:
             self.add_playlist_data(playlist_id)
