@@ -1,13 +1,35 @@
+import os
 import time
 import sqlite3
 import pandas as pd
 import requests
-from tools.key_handler import get_local_auth_key
+from tools.keyhandler import get_local_auth_key
 
 class DatabaseHelper:
 
     def __init__(self, db):
+        # check if database file exists, and attempt creation if not
+        if os.path.isfile(db):
+            print("Database file exists, no further action required.")
+        else:
+            print("Database file not found. Attempting to create")
+
+            head, tail = os.path.split(db)
+            
+            if head == '':
+                print("No directory supplied. ", end='')
+            elif os.path.isdir(head):
+                print("Directory exists. ", end='')
+            else:
+                print("Directory not found. Attempting to create path")
+                os.makedirs(head)
+
+        print("Attempting to create database")
+        conn = sqlite3.connect(db)
+        conn.close()
+        
         self.db = db
+        
 
     def __repr__(self):
         table_names = self.run_query("SELECT name FROM sqlite_master WHERE type = 'table';")
@@ -56,16 +78,22 @@ class DatabaseHelper:
         return self.run_query(q)
 
 
-    def recreate_database(self):
-        print("Recreating database...")
+class PlaylistDatabase(DatabaseHelper):
+    def __init__(self, db, wipe_database=False):
+        super().__init__(db)
 
-        table_names = ['playlist_track', 'track', 'album', 'artist', 'playlist']
+        if wipe_database:
+            self._wipe_database()
+        
+        self._create_database()
 
-        for table_name in table_names:
-            self.run_command(f"DROP TABLE IF EXISTS {table_name};")
+
+    def _create_database(self):
+
+        print("Creating tables in database...")
 
         self.run_command("""
-            CREATE TABLE artist (
+            CREATE TABLE IF NOT EXISTS artist (
                 artist_id INTEGER PRIMARY KEY,
                 name TEXT,
                 uri TEXT UNIQUE
@@ -73,7 +101,7 @@ class DatabaseHelper:
         """)
 
         self.run_command("""
-            CREATE TABLE album (
+            CREATE TABLE IF NOT EXISTS album (
                 album_id INTEGER PRIMARY KEY,
                 name TEXT,
                 release_date TEXT,
@@ -84,7 +112,7 @@ class DatabaseHelper:
         """)
 
         self.run_command("""
-            CREATE TABLE track (
+            CREATE TABLE IF NOT EXISTS track (
                 track_id INTEGER PRIMARY KEY,
                 name VARCHAR,
                 album_id INTEGER,
@@ -99,7 +127,7 @@ class DatabaseHelper:
         """)
 
         self.run_command("""
-            CREATE TABLE playlist (
+            CREATE TABLE IF NOT EXISTS playlist (
                 playlist_id INTEGER PRIMARY KEY,
                 name VARCHAR,
                 uri TEXT UNIQUE
@@ -107,7 +135,7 @@ class DatabaseHelper:
         """)
 
         self.run_command("""
-            CREATE TABLE playlist_track (
+            CREATE TABLE IF NOT EXISTS playlist_track (
                 playlist_id INTEGER,
                 track_id INTEGER,
                 PRIMARY KEY (playlist_id, track_id)
@@ -116,10 +144,27 @@ class DatabaseHelper:
             );
         """)
 
-        print("Recreating database complete")
+        print("Table creation complete")
 
 
-    def __get_playlist_name(self, playlist_id, key):
+    def _wipe_database(self):
+
+        print("Wiping database...")
+
+        q = "SELECT name FROM sqlite_master WHERE type = 'table';"
+        table_names = self.run_query(q)
+        # table_names = ['playlist_track', 'track', 'album', 'artist', 'playlist']
+        
+        with sqlite3.connect(self.db) as conn:
+            # not using run_command so not enforce foreign key constraint
+            for table_name in table_names['name'].values:
+                conn.isolation_level = None
+                conn.execute(f"DROP TABLE {table_name};")
+
+        print("Wiping database complete")
+
+
+    def _get_playlist_name(self, playlist_id, key):
         url = f'https://api.spotify.com/v1/playlists/{playlist_id}'
         headers = {"Authorization": "Bearer " + key}
         params = {"fields": "name"}
@@ -137,7 +182,7 @@ class DatabaseHelper:
         return playlist_name
 
     
-    def __get_playlist_tracks(self, playlist_id, key):
+    def _get_playlist_tracks(self, playlist_id, key):
 
         # this only gets called at the start of the generator
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
@@ -162,7 +207,7 @@ class DatabaseHelper:
                 raise Exception(f"Bad response: [{code}] {msg}\n")
 
 
-    def __insert_artist(self, track):
+    def _insert_artist(self, track):
         # get relevant artist data
         album_artist = [artist for artist in track['album']['artists']]
         artist_uri = album_artist[0]['id']
@@ -184,7 +229,7 @@ class DatabaseHelper:
         return artist_uri
 
 
-    def __insert_album(self, track, artist_uri):
+    def _insert_album(self, track, artist_uri):
         # get relevant album data
         album_uri = track['album']['id']
         album_name = track['album']['name']
@@ -219,7 +264,7 @@ class DatabaseHelper:
         return album_uri
 
 
-    def __insert_track(self, track, album_uri):
+    def _insert_track(self, track, album_uri):
         # get relevant album data
         track_uri = track['id']
         name = str(track['name']).replace('"', '')
@@ -263,7 +308,7 @@ class DatabaseHelper:
         return track_uri
 
 
-    def __insert_playlist_track(self, track, playlist_id, track_uri):
+    def _insert_playlist_track(self, track, playlist_id, track_uri):
         # Get ids for playlist_track
         q3 = f"SELECT playlist_id FROM playlist WHERE uri = '{playlist_id}'"
         internal_playlist_id = self.run_query(q3).iloc[0, 0]
@@ -278,35 +323,48 @@ class DatabaseHelper:
         """)
 
 
-    def get_playlist_data(self, playlist_id):
+    def add_playlist_data(self, playlist_id):
+        out = None
+        if ':' in playlist_id:
+            out = playlist_id + ' => '
+            playlist_id = playlist_id.split(':')[-1]
+            out += playlist_id
+
         print(f"\nStarting retrieval for playlist: {playlist_id}")
+        if out:
+            print(f"  Converting playlist uri:", out)
 
         auth_key_path = './keys'
         auth_key_file = 'auth.txt'
 
         key = get_local_auth_key(auth_key_path, auth_key_file)
 
-        playlist_name = self.__get_playlist_name(playlist_id, key)
+        playlist_name = self._get_playlist_name(playlist_id, key)
 
-        self.run_command(
-        f"""INSERT OR IGNORE INTO playlist (name, uri)
-            VALUES ("{playlist_name}", "{playlist_id}");"""
-        )
+        self.run_command(f"""
+            INSERT OR IGNORE INTO playlist (name, uri)
+            VALUES ("{playlist_name}", "{playlist_id}");
+        """)
 
         print(f"  Added {playlist_name} to playlist table")
         print("  Starting to acquire response data.")
 
-        for response in self.__get_playlist_tracks(playlist_id, key):
+        for response in self._get_playlist_tracks(playlist_id, key):
             print("  Retrieved from:", response.json()['href'][37:])
             print("  Inserting into database...", end='\r')
 
             tracks = [item['track'] for item in response.json()['items']]
 
             for track in tracks:
-                artist_uri = self.__insert_artist(track)
-                album_uri = self.__insert_album(track, artist_uri)
-                track_uri = self.__insert_track(track, album_uri)
-                self.__insert_playlist_track(track, playlist_id, track_uri)
+                artist_uri = self._insert_artist(track)
+                album_uri = self._insert_album(track, artist_uri)
+                track_uri = self._insert_track(track, album_uri)
+                self._insert_playlist_track(track, playlist_id, track_uri)
 
             print("  Successfully inserted response data. Continuing...")
             time.sleep(1)
+
+
+    def add_multiple_playlists(self, playlist_ids):
+        for playlist_id in playlist_ids:
+            self.add_playlist_data(playlist_id)
